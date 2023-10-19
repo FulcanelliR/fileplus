@@ -4,10 +4,9 @@ import chardet
 import magic
 import pygments
 import pygments.util
-import codecs  # Import codecs for base64 decoding
-from pygments.lexers import guess_lexer_for_filename
-from pygments.lexers import guess_lexer
-from pygments.lexers import get_lexer_for_filename
+import codecs
+from urllib.parse import unquote  # Import for URLdecode
+from pygments.lexers import guess_lexer_for_filename, guess_lexer, get_lexer_for_filename
 
 def identify_programming_language(file_path):
     try:
@@ -51,20 +50,45 @@ def detect_compression(file_path):
 
 def detect_obfuscation(code_bytes):
     try:
-        decoded_bytes = codecs.decode(code_bytes, 'base64')
-        return "Base64 encoding detected"
-    except Exception as e:
-        return "No obfuscation detected"
+        codecs.decode(code_bytes, 'base64')
+        return "Base64 possible encoding detected"
+    except:
+        pass
+
+    try:
+        if all([c in '01' for c in code_bytes.decode('utf-8', errors='ignore')]):
+            return "Binary possible encoding detected"
+    except:
+        pass
+
+    try:
+        int(code_bytes.decode('utf-8', errors='ignore'), 16)
+        return "Hex possible encoding detected"
+    except:
+        pass
+
+    try:
+        unquote(code_bytes.decode('utf-8', errors='ignore'))
+        return "URL possible encoding detected"
+    except:
+        pass
+
+    return "No obfuscation detected"
 
 def deobfuscate_code(code_bytes, obfuscation_type):
-    if obfuscation_type == "Base64 encoding detected":
-        try:
-            decoded_bytes = codecs.decode(code_bytes, 'base64')
-            return decoded_bytes.decode('utf-8', errors='ignore')
-        except Exception as e:
-            return f"Error decoding Base64: {str(e)}"
-
-    # Add more deobfuscation methods as needed
+    decoded_str = ""
+    try:
+        if obfuscation_type == "Base64 possible encoding detected":
+            decoded_str = codecs.decode(code_bytes, 'base64').decode('utf-8', errors='ignore')
+        elif obfuscation_type == "Binary possible encoding detected":
+            decoded_str = ''.join([chr(int(code_bytes[i:i+8].decode('utf-8'), 2)) for i in range(0, len(code_bytes), 8)])
+        elif obfuscation_type == "Hex possible encoding detected":
+            decoded_str = bytes.fromhex(code_bytes.decode('utf-8', errors='ignore')).decode('utf-8', errors='ignore')
+        elif obfuscation_type == "URL possible encoding detected":
+            decoded_str = unquote(code_bytes.decode('utf-8', errors='ignore'))
+        return decoded_str
+    except Exception as e:
+        return f"Error decoding possible {obfuscation_type}: {str(e)}"
 
     # If obfuscation type is not recognized
     return "Unable to deobfuscate"
